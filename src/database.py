@@ -4,6 +4,169 @@ import os
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DB_PATH = os.path.join(BASE_DIR, "../data/meal_planner.db")
 
+### 🔍 ADDING DATA ###
+def add_recipe(name, portion_size, ingredients, tags=None):
+    """
+    Adds a recipe to the database along with its ingredients and optional tags.
+
+    Parameters:
+    - name (str): The name of the recipe
+    - portion_size (int): Number of portions
+    - ingredients (list of tuples): A list containing (ingredient_name, amount)
+    - tags (list of str): A list of tags associated with the recipe (default: None)
+    """
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+
+    try:
+        # Insert recipe into recipes table
+        cursor.execute("""
+            INSERT INTO recipes (name, portion_size)
+            VALUES (?, ?)
+        """, (name, portion_size))
+
+        # Get the recipe ID
+        recipe_id = cursor.lastrowid
+
+        # Process ingredients
+        for ingredient_name, amount in ingredients:
+            # Get the ingredient ID
+            cursor.execute("""
+                SELECT id FROM ingredients WHERE name = ?
+            """, (ingredient_name,))
+            result = cursor.fetchone()
+
+            if not result:
+                print(f"⚠️ Warning: Ingredient '{ingredient_name}' not found. Skipping.")
+                continue
+
+            ingredient_id = result[0]
+
+            # Insert into recipe_ingredients
+            cursor.execute("""
+                INSERT INTO recipe_ingredients (recipe_id, ingredient_id, amount)
+                VALUES (?, ?, ?)
+            """, (recipe_id, ingredient_id, amount))
+
+        # Process tags (if provided)
+        if tags:
+            for tag in tags:
+                cursor.execute("""
+                    INSERT OR IGNORE INTO tags (name) VALUES (?)
+                """, (tag,))
+
+                cursor.execute("""
+                    SELECT id FROM tags WHERE name = ?
+                """, (tag,))
+                tag_id = cursor.fetchone()[0]
+
+                cursor.execute("""
+                    INSERT INTO recipe_tags (recipe_id, tag_id)
+                    VALUES (?, ?)
+                """, (recipe_id, tag_id))
+
+        # Commit changes
+        conn.commit()
+        print(f"✅ Recipe '{name}' added successfully!")
+
+    except sqlite3.Error as e:
+        print(f"❌ Error: {e}")
+        conn.rollback()
+
+    finally:
+        conn.close()
+
+
+def add_ingredient(name, category_name):
+    """
+    Adds an ingredient to the database if it does not already exist.
+    Ensures the category exists in the ingredient_categories table.
+
+    Parameters:
+    - name (str): The name of the ingredient.
+    - category_name (str): The category of the ingredient.
+
+    Returns:
+    - ingredient_id (int): The ID of the ingredient in the database.
+    """
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+
+    try:
+        # Ensure the category exists
+        cursor.execute("""
+            INSERT OR IGNORE INTO ingredient_categories (name)
+            VALUES (?)
+        """, (category_name,))
+
+        # Get the category ID
+        cursor.execute("""
+            SELECT id FROM ingredient_categories WHERE name = ?
+        """, (category_name,))
+        category_id = cursor.fetchone()[0]
+
+        # Insert the ingredient
+        cursor.execute("""
+            INSERT OR IGNORE INTO ingredients (name, category_id)
+            VALUES (?, ?)
+        """, (name, category_id))
+
+        # Retrieve the ingredient ID
+        cursor.execute("""
+            SELECT id FROM ingredients WHERE name = ?
+        """, (name,))
+        ingredient_id = cursor.fetchone()[0]
+
+        conn.commit()
+        print(f"✅ Ingredient '{name}' added successfully!")
+        return ingredient_id
+
+    except sqlite3.Error as e:
+        print(f"❌ Error: {e}")
+        conn.rollback()
+        return None
+
+    finally:
+        conn.close()
+
+
+def add_tag(tag_name):
+    """
+    Adds a tag to the database if it does not already exist.
+
+    Parameters:
+    - tag_name (str): The tag to add.
+
+    Returns:
+    - tag_id (int): The ID of the tag in the database.
+    """
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+
+    try:
+        # Insert tag
+        cursor.execute("""
+            INSERT OR IGNORE INTO tags (name)
+            VALUES (?)
+        """, (tag_name,))
+
+        # Retrieve tag ID
+        cursor.execute("""
+            SELECT id FROM tags WHERE name = ?
+        """, (tag_name,))
+        tag_id = cursor.fetchone()[0]
+
+        conn.commit()
+        print(f"✅ Tag '{tag_name}' added successfully!")
+        return tag_id
+
+    except sqlite3.Error as e:
+        print(f"❌ Error: {e}")
+        conn.rollback()
+        return None
+
+    finally:
+        conn.close()
 
 ### 🔍 FETCHING DATA ###
 
